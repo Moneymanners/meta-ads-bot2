@@ -61,8 +61,25 @@ export default function Dashboard() {
   useEffect(() => {
     if (selectedCampaign) {
       fetchAnalysis(selectedCampaign.id);
+      fetchCampaignSettings(selectedCampaign.id);
     }
   }, [selectedCampaign]);
+
+  const fetchCampaignSettings = async (campaignId) => {
+    try {
+      const res = await fetch(`/api/campaign-settings?campaignId=${campaignId}`);
+      const data = await res.json();
+      if (data.settings) {
+        setSettings({
+          autoOptimize: data.settings.auto_optimize || false,
+          maxBudgetIncrease: data.settings.max_budget_increase || 30,
+          maxBudgetDecrease: data.settings.max_budget_decrease || 30,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching campaign settings:', error);
+    }
+  };
 
   const fetchCampaigns = async () => {
     try {
@@ -424,11 +441,88 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Settings */}
-              <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <span>⚙️</span> Settings
-                </h3>
+            {/* Campaign Settings */}
+<div className="bg-dark-800 rounded-xl p-6 border border-white/5">
+  <h3 className="font-semibold mb-4 flex items-center gap-2">
+    <span>⚙️</span> Campaign Settings
+  </h3>
+  {selectedCampaign && (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <label className="text-sm text-gray-300">Auto-Optimize This Campaign</label>
+        <button
+          onClick={async () => {
+            const newValue = !settings.autoOptimize;
+            setSettings(s => ({ ...s, autoOptimize: newValue }));
+            await fetch('/api/campaign-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                campaign_id: selectedCampaign.id,
+                auto_optimize: newValue,
+                max_budget_increase: settings.maxBudgetIncrease,
+                max_budget_decrease: settings.maxBudgetDecrease,
+              }),
+            });
+          }}
+          className={`toggle ${settings.autoOptimize ? 'toggle-enabled' : 'toggle-disabled'}`}
+        >
+          <span className={`toggle-knob ${settings.autoOptimize ? 'translate-x-5' : 'translate-x-1'}`} />
+        </button>
+      </div>
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Max Budget Increase</label>
+        <input
+          type="range"
+          min="10"
+          max="50"
+          value={settings.maxBudgetIncrease}
+          onChange={async (e) => {
+            const value = parseInt(e.target.value);
+            setSettings(s => ({ ...s, maxBudgetIncrease: value }));
+            await fetch('/api/campaign-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                campaign_id: selectedCampaign.id,
+                auto_optimize: settings.autoOptimize,
+                max_budget_increase: value,
+                max_budget_decrease: settings.maxBudgetDecrease,
+              }),
+            });
+          }}
+          className="w-full"
+        />
+        <span className="text-sm font-mono">{settings.maxBudgetIncrease}%</span>
+      </div>
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Max Budget Decrease</label>
+        <input
+          type="range"
+          min="10"
+          max="50"
+          value={settings.maxBudgetDecrease}
+          onChange={async (e) => {
+            const value = parseInt(e.target.value);
+            setSettings(s => ({ ...s, maxBudgetDecrease: value }));
+            await fetch('/api/campaign-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                campaign_id: selectedCampaign.id,
+                auto_optimize: settings.autoOptimize,
+                max_budget_increase: settings.maxBudgetIncrease,
+                max_budget_decrease: value,
+              }),
+            });
+          }}
+          className="w-full"
+        />
+        <span className="text-sm font-mono">{settings.maxBudgetDecrease}%</span>
+      </div>
+    </div>
+  )}
+</div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-sm text-gray-300">Auto-Optimize</label>
