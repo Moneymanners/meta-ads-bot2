@@ -15,6 +15,38 @@ export default function Dashboard() {
     maxBudgetIncrease: 30,
     maxBudgetDecrease: 30,
   });
+  // Fetch settings on load
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      if (data.settings) {
+        setSettings({
+          autoOptimize: data.settings.auto_optimize || false,
+          maxBudgetIncrease: data.settings.max_budget_increase || 30,
+          maxBudgetDecrease: data.settings.max_budget_decrease || 30,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    }
+  };
+
+  const saveSettings = async (newSettings) => {
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings),
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
@@ -401,7 +433,11 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <label className="text-sm text-gray-300">Auto-Optimize</label>
                     <button
-                      onClick={() => setSettings(s => ({ ...s, autoOptimize: !s.autoOptimize }))}
+                     onClick={() => {
+  const newSettings = { ...settings, autoOptimize: !settings.autoOptimize };
+  setSettings(newSettings);
+  saveSettings(newSettings);
+}}
                       className={`toggle ${settings.autoOptimize ? 'toggle-enabled' : 'toggle-disabled'}`}
                     >
                       <span className={`toggle-knob ${settings.autoOptimize ? 'translate-x-5' : 'translate-x-1'}`} />
