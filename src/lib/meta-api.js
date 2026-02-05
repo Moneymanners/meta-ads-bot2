@@ -40,11 +40,11 @@ class MetaAdsAPI {
   /**
    * Get all active campaigns
    */
-  async getCampaigns() {
+ async getCampaigns() {
     const endpoint = `/${this.adAccountId}/campaigns`;
     const params = new URLSearchParams({
       fields: 'id,name,status,objective,daily_budget,lifetime_budget,budget_remaining',
-      filtering: JSON.stringify([{ field: 'status', operator: 'IN', value: ['ACTIVE'] }]),
+      effective_status: '["ACTIVE"]',
     });
 
     const data = await this.request(`${endpoint}?${params}`);
