@@ -180,9 +180,16 @@ export default function Home() {
     }).format(value || 0);
   };
 
-  const summary = analysis?.summary || {};
-  const hourlyData = analysis?.hourlyBreakdown || [];
-  const recommendations = analysis?.recommendations || [];
+const summary = {
+  totalSpend: analysis?.totalSpend || 0,
+  totalPurchases: analysis?.totalPurchases || 0,
+  totalRevenue: analysis?.totalRevenue || 0,
+  avgRoas: analysis?.overallRoas || 0,
+  avgCpa: analysis?.overallCpa || 0,
+};
+const hourlyData = analysis?.hourlyAnalysis || [];
+const recommendations = analysis?.recommendations || [];
+const insights = analysis?.summary || {};
 
   return (
     <div className="min-h-screen bg-dark-900 text-white">
@@ -518,19 +525,19 @@ export default function Home() {
                     <div>
                       <p className="text-xs text-gray-400">Best Hours</p>
                       <p className="text-green-400 font-medium">
-                        {analysis?.insights?.bestHours?.join(', ') || 'Analyzing...'}
+                       {insights?.peakPerformanceHours || 'Analyzing...'}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Worst Hours</p>
                       <p className="text-red-400 font-medium">
-                        {analysis?.insights?.worstHours?.join(', ') || 'Analyzing...'}
+                  {insights?.underperformingHours || 'None'}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Top Recommendation</p>
                       <p className="text-gray-300 text-sm">
-                        {analysis?.insights?.topRecommendation || 'No immediate actions needed'}
+                        {insights?.topRecommendation || 'No immediate actions needed'}
                       </p>
                     </div>
                   </div>
