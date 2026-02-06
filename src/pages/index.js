@@ -17,6 +17,31 @@ export default function Home() {
   const [dailyAnalysis, setDailyAnalysis] = useState(null);
   const [impact, setImpact] = useState(null);
   const [suggestions, setSuggestions] = useState(null);
+  
+  // Date filter state
+  const [dateRange, setDateRange] = useState('last_14_days');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+
+  const dateRangeOptions = [
+    { value: 'today', label: 'Today' },
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'last_7_days', label: 'Last 7 Days' },
+    { value: 'last_14_days', label: 'Last 14 Days' },
+    { value: 'last_30_days', label: 'Last 30 Days' },
+    { value: 'this_month', label: 'This Month' },
+    { value: 'last_month', label: 'Last Month' },
+    { value: 'custom', label: 'Custom Range' },
+  ];
+
+  const getDateRangeLabel = () => {
+    if (dateRange === 'custom' && customStartDate && customEndDate) {
+      return `${customStartDate} - ${customEndDate}`;
+    }
+    const option = dateRangeOptions.find(o => o.value === dateRange);
+    return option ? option.label : 'Last 14 Days';
+  };
 
   useEffect(() => {
     fetchCampaigns();
@@ -30,7 +55,7 @@ export default function Home() {
       fetchDailyAnalysis(selectedCampaign.id);
       fetchImpact(selectedCampaign.id);
     }
-  }, [selectedCampaign]);
+  }, [selectedCampaign, dateRange, customStartDate, customEndDate]);
 
   const fetchCampaigns = async () => {
     try {
@@ -49,7 +74,11 @@ export default function Home() {
 
   const fetchAnalysis = async (campaignId) => {
     try {
-      const res = await fetch(`/api/analyze?campaignId=${campaignId}`);
+      let url = `/api/analyze?campaignId=${campaignId}&dateRange=${dateRange}`;
+      if (dateRange === 'custom' && customStartDate && customEndDate) {
+        url += `&startDate=${customStartDate}&endDate=${customEndDate}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       console.log('Analysis data:', data);
       setAnalysis(data);
@@ -99,7 +128,11 @@ export default function Home() {
 
   const fetchDailyAnalysis = async (campaignId) => {
     try {
-      const res = await fetch(`/api/daily-analysis?campaignId=${campaignId}`);
+      let url = `/api/daily-analysis?campaignId=${campaignId}&dateRange=${dateRange}`;
+      if (dateRange === 'custom' && customStartDate && customEndDate) {
+        url += `&startDate=${customStartDate}&endDate=${customEndDate}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       setDailyAnalysis(data);
     } catch (error) {
@@ -182,7 +215,7 @@ export default function Home() {
     }).format(value || 0);
   };
 
-  // FIXED: Map analysis data - API returns overallMetrics object
+  // Map analysis data
   const metrics = analysis?.overallMetrics || {};
   const totalSpend = metrics.totalSpend || analysis?.totalSpend || 0;
   const totalPurchases = metrics.totalPurchases || analysis?.totalPurchases || 0;
@@ -190,7 +223,6 @@ export default function Home() {
   const overallRoas = metrics.overallRoas || analysis?.overallRoas || 0;
   const overallCpa = metrics.overallCpa || analysis?.overallCpa || 0;
   
-  // Map hourly data - API returns {hour, metrics: {spend, purchases, roas, cpa}, scores: {composite}, recommendation}
   const hourlyData = (analysis?.hourlyAnalysis || []).map(item => ({
     hour: item.hour,
     spend: item.metrics?.spend || 0,
@@ -240,28 +272,113 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Campaign Selector */}
-        <div className="mb-6">
-          <h2 className="text-sm font-medium text-gray-400 mb-2">Select Campaign</h2>
-          {campaigns.length === 0 ? (
-            <p className="text-gray-500">No campaigns found. Click Sync Data to fetch from Meta.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {campaigns.map((campaign) => (
-                <button
-                  key={campaign.id}
-                  onClick={() => setSelectedCampaign(campaign)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    selectedCampaign?.id === campaign.id
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-dark-800 text-gray-300 hover:bg-dark-700'
-                  }`}
-                >
-                  {campaign.name}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Campaign Selector and Date Filter Row */}
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div className="flex-1">
+            <h2 className="text-sm font-medium text-gray-400 mb-2">Select Campaign</h2>
+            {campaigns.length === 0 ? (
+              <p className="text-gray-500">No campaigns found. Click Sync Data to fetch from Meta.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {campaigns.map((campaign) => (
+                  <button
+                    key={campaign.id}
+                    onClick={() => setSelectedCampaign(campaign)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      selectedCampaign?.id === campaign.id
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-dark-800 text-gray-300 hover:bg-dark-700'
+                    }`}
+                  >
+                    {campaign.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Date Filter */}
+          <div className="relative">
+            <h2 className="text-sm font-medium text-gray-400 mb-2">Date Range</h2>
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="flex items-center gap-2 bg-dark-800 hover:bg-dark-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-white/10 min-w-[180px]"
+            >
+              <span>📅</span>
+              <span className="flex-1 text-left">{getDateRangeLabel()}</span>
+              <span className="text-gray-400">▼</span>
+            </button>
+            
+            {showDatePicker && (
+              <>
+                {/* Backdrop */}
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setShowDatePicker(false)}
+                />
+                
+                {/* Dropdown */}
+                <div className="absolute right-0 mt-2 w-64 bg-dark-800 rounded-lg shadow-xl border border-white/10 z-50 overflow-hidden">
+                  {dateRangeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        if (option.value !== 'custom') {
+                          setDateRange(option.value);
+                          setShowDatePicker(false);
+                        } else {
+                          setDateRange('custom');
+                        }
+                      }}
+                      className={`w-full text-left px-4 py-3 text-sm hover:bg-dark-700 transition-colors flex items-center gap-2 ${
+                        dateRange === option.value ? 'bg-purple-600/20 text-purple-400' : 'text-gray-300'
+                      }`}
+                    >
+                      {dateRange === option.value && <span>✓</span>}
+                      <span className={dateRange === option.value ? '' : 'ml-5'}>{option.label}</span>
+                    </button>
+                  ))}
+                  
+                  {/* Custom Date Range Inputs */}
+                  {dateRange === 'custom' && (
+                    <div className="p-4 border-t border-white/10">
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">Start Date</label>
+                          <input
+                            type="date"
+                            value={customStartDate}
+                            onChange={(e) => setCustomStartDate(e.target.value)}
+                            className="w-full bg-dark-700 border border-white/10 rounded px-3 py-2 text-sm text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">End Date</label>
+                          <input
+                            type="date"
+                            value={customEndDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                            className="w-full bg-dark-700 border border-white/10 rounded px-3 py-2 text-sm text-white"
+                          />
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (customStartDate && customEndDate) {
+                              setShowDatePicker(false);
+                            }
+                          }}
+                          disabled={!customStartDate || !customEndDate}
+                          className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded text-sm font-medium transition-colors"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {selectedCampaign && analysis && (
@@ -292,7 +409,7 @@ export default function Home() {
               </div>
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
                 <p className="text-xs text-gray-400 mb-1">PERIOD</p>
-                <p className="text-lg font-bold text-gray-300">Last 14 days</p>
+                <p className="text-lg font-bold text-gray-300">{getDateRangeLabel()}</p>
               </div>
             </div>
 
@@ -630,10 +747,10 @@ export default function Home() {
                         }`}
                       >
                         <span
-  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 ${
-    settings.autoOptimize ? 'left-6' : 'left-1'
-  }`}
-/>
+                          className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 ${
+                            settings.autoOptimize ? 'left-6' : 'left-1'
+                          }`}
+                        />
                       </button>
                     </div>
                     <div>
