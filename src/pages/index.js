@@ -570,3 +570,74 @@ export default function Dashboard() {
     </>
   );
 }
+const [suggestions, setSuggestions] = useState(null);
+const fetchSuggestions = async () => {
+  try {
+    const res = await fetch('/api/suggestions');
+    const data = await res.json();
+    setSuggestions(data);
+  } catch (error) {
+    console.error('Error fetching suggestions:', error);
+  }
+};
+useEffect(() => {
+  fetchSuggestions();
+}, []);
+{/* AI Suggestions */}
+{suggestions && (
+  <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
+    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <span>🤖</span> Latest Optimization Tips
+      <span className="text-xs text-gray-500 ml-auto">
+        Updated: {new Date(suggestions.updated_at).toLocaleDateString()}
+      </span>
+    </h3>
+
+    {/* YouTube Tips */}
+    <div className="mb-6">
+      <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
+        <span>📺</span> From YouTube Experts
+      </h4>
+      <div className="space-y-3">
+        {suggestions.youtube_tips?.map((tip, index) => (
+          <div key={index} className="bg-dark-700 rounded-lg p-3">
+            <p className="font-medium text-sm">{tip.title}</p>
+            <p className="text-xs text-gray-400">— {tip.source}</p>
+            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Web Tips */}
+    <div className="mb-6">
+      <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
+        <span>🌐</span> From the Web
+      </h4>
+      <div className="space-y-3">
+        {suggestions.web_tips?.map((tip, index) => (
+          <div key={index} className="bg-dark-700 rounded-lg p-3">
+            <p className="font-medium text-sm">{tip.title}</p>
+            <p className="text-xs text-gray-400">— {tip.source}</p>
+            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Quick Tips */}
+    <div>
+      <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
+        <span>⚡</span> Quick Wins
+      </h4>
+      <ul className="space-y-2">
+        {suggestions.general_recommendations?.map((tip, index) => (
+          <li key={index} className="text-sm text-gray-300 flex items-start gap-2">
+            <span className="text-green-400">✓</span>
+            {tip}
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+)}
