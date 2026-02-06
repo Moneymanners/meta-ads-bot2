@@ -51,6 +51,7 @@ export default function Home() {
     try {
       const res = await fetch(`/api/analyze?campaignId=${campaignId}`);
       const data = await res.json();
+      console.log('Analysis data:', data);
       setAnalysis(data);
     } catch (error) {
       console.error('Error fetching analysis:', error);
@@ -154,6 +155,7 @@ export default function Home() {
   };
 
   const getActionBadge = (action) => {
+    const actionUpper = (action || 'monitor').toUpperCase();
     const styles = {
       INCREASE: 'bg-green-500/20 text-green-400',
       MAINTAIN: 'bg-blue-500/20 text-blue-400',
@@ -167,8 +169,8 @@ export default function Home() {
       MONITOR: '⚠',
     };
     return (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${styles[action] || styles.MONITOR}`}>
-        {icons[action]} {action}
+      <span className={`px-2 py-1 rounded text-xs font-medium ${styles[actionUpper] || styles.MONITOR}`}>
+        {icons[actionUpper] || '⚠'} {actionUpper}
       </span>
     );
   };
@@ -180,16 +182,26 @@ export default function Home() {
     }).format(value || 0);
   };
 
-const summary = {
-  totalSpend: analysis?.totalSpend || 0,
-  totalPurchases: analysis?.totalPurchases || 0,
-  totalRevenue: analysis?.totalRevenue || 0,
-  avgRoas: analysis?.overallRoas || 0,
-  avgCpa: analysis?.overallCpa || 0,
-};
-const hourlyData = analysis?.hourlyAnalysis || [];
-const recommendations = analysis?.recommendations || [];
-const insights = analysis?.summary || {};
+  // Map analysis data to display format - FIXED FIELD MAPPING
+  const totalSpend = analysis?.totalSpend || 0;
+  const totalPurchases = analysis?.totalPurchases || 0;
+  const totalRevenue = analysis?.totalRevenue || 0;
+  const overallRoas = analysis?.overallRoas || 0;
+  const overallCpa = analysis?.overallCpa || 0;
+  
+  // Map hourly data - API returns {hour, metrics: {spend, purchases, roas, cpa}, scores: {composite}, recommendation}
+  const hourlyData = (analysis?.hourlyAnalysis || []).map(item => ({
+    hour: item.hour,
+    spend: item.metrics?.spend || 0,
+    purchases: item.metrics?.purchases || 0,
+    roas: item.metrics?.roas || 0,
+    cpa: item.metrics?.cpa || 0,
+    score: item.scores?.composite || 0,
+    action: item.recommendation || 'monitor',
+  })).sort((a, b) => a.hour - b.hour);
+  
+  const recommendations = analysis?.recommendations || [];
+  const insights = analysis?.summary || {};
 
   return (
     <div className="min-h-screen bg-dark-900 text-white">
@@ -231,7 +243,7 @@ const insights = analysis?.summary || {};
         <div className="mb-6">
           <h2 className="text-sm font-medium text-gray-400 mb-2">Select Campaign</h2>
           {campaigns.length === 0 ? (
-            <p className="text-gray-500">No campaigns found. Click "Sync Data" to fetch from Meta.</p>
+            <p className="text-gray-500">No campaigns found. Click Sync Data to fetch from Meta.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {campaigns.map((campaign) => (
@@ -257,25 +269,25 @@ const insights = analysis?.summary || {};
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
                 <p className="text-xs text-gray-400 mb-1">TOTAL SPEND</p>
-                <p className="text-xl font-bold text-purple-400">{formatCurrency(summary.totalSpend)}</p>
+                <p className="text-xl font-bold text-purple-400">{formatCurrency(totalSpend)}</p>
               </div>
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
                 <p className="text-xs text-gray-400 mb-1">PURCHASES</p>
-                <p className="text-xl font-bold text-blue-400">{summary.totalPurchases || 0}</p>
+                <p className="text-xl font-bold text-blue-400">{totalPurchases}</p>
               </div>
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
                 <p className="text-xs text-gray-400 mb-1">REVENUE</p>
-                <p className="text-xl font-bold text-green-400">{formatCurrency(summary.totalRevenue)}</p>
+                <p className="text-xl font-bold text-green-400">{formatCurrency(totalRevenue)}</p>
               </div>
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
                 <p className="text-xs text-gray-400 mb-1">ROAS</p>
-                <p className={`text-xl font-bold ${summary.avgRoas >= 1 ? 'text-green-400' : 'text-red-400'}`}>
-                  {(summary.avgRoas || 0).toFixed(2)}x
+                <p className={`text-xl font-bold ${overallRoas >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+                  {overallRoas.toFixed(2)}x
                 </p>
               </div>
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
                 <p className="text-xs text-gray-400 mb-1">CPA</p>
-                <p className="text-xl font-bold text-orange-400">{formatCurrency(summary.avgCpa)}</p>
+                <p className="text-xl font-bold text-orange-400">{formatCurrency(overallCpa)}</p>
               </div>
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
                 <p className="text-xs text-gray-400 mb-1">PERIOD</p>
@@ -525,13 +537,13 @@ const insights = analysis?.summary || {};
                     <div>
                       <p className="text-xs text-gray-400">Best Hours</p>
                       <p className="text-green-400 font-medium">
-                       {insights?.peakPerformanceHours || 'Analyzing...'}
+                        {insights?.peakPerformanceHours || 'Analyzing...'}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Worst Hours</p>
                       <p className="text-red-400 font-medium">
-                  {insights?.underperformingHours || 'None'}
+                        {insights?.underperformingHours || 'None'}
                       </p>
                     </div>
                     <div>
@@ -549,7 +561,7 @@ const insights = analysis?.summary || {};
                     <span>💡</span> Recommendations
                   </h3>
                   {recommendations.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No recommendations yet. Sync data to analyze.</p>
+                    <p className="text-gray-500 text-sm">No recommendations yet.</p>
                   ) : (
                     <div className="space-y-3">
                       {recommendations.slice(0, 3).map((rec, index) => (
@@ -570,9 +582,9 @@ const insights = analysis?.summary || {};
                             <span className="text-xs text-gray-400">{rec.type}</span>
                           </div>
                           <p className="text-sm text-gray-300">{rec.reason}</p>
-                          {rec.suggestedChange && (
+                          {rec.percentChange && (
                             <p className="text-xs text-green-400 mt-1">
-                              Budget change: {rec.suggestedChange > 0 ? '+' : ''}{rec.suggestedChange}%
+                              Budget change: {rec.percentChange > 0 ? '+' : ''}{rec.percentChange}%
                             </p>
                           )}
                         </div>
