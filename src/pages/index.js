@@ -1,134 +1,48 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Legend 
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-export default function Dashboard() {
+export default function Home() {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
-  const [dailyAnalysis, setDailyAnalysis] = useState(null);
-const [impact, setImpact] = useState(null);
-const [suggestions, setSuggestions] = useState(null);
   const [analysis, setAnalysis] = useState(null);
-  const [recommendations, setRecommendations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState(null);
   const [settings, setSettings] = useState({
     autoOptimize: false,
     maxBudgetIncrease: 30,
     maxBudgetDecrease: 30,
   });
-  // Fetch settings on load
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+  const [dailyAnalysis, setDailyAnalysis] = useState(null);
+  const [impact, setImpact] = useState(null);
+  const [suggestions, setSuggestions] = useState(null);
 
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch('/api/settings');
-      const data = await res.json();
-      if (data.settings) {
-        setSettings({
-          autoOptimize: data.settings.auto_optimize || false,
-          maxBudgetIncrease: data.settings.max_budget_increase || 30,
-          maxBudgetDecrease: data.settings.max_budget_decrease || 30,
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    }
-  };
-
-  const saveSettings = async (newSettings) => {
-    try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings),
-      });
-    } catch (error) {
-      console.error('Error saving settings:', error);
-    }
-  };
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState(null);
-
-  // Fetch campaigns on load
   useEffect(() => {
     fetchCampaigns();
-    fetchRecommendations();
+    fetchSuggestions();
   }, []);
-  const fetchDailyAnalysis = async (campaignId) => {
-  try {
-    const res = await fetch(`/api/daily-analysis?campaignId=${campaignId}`);
-    const data = await res.json();
-    setDailyAnalysis(data);
-  } catch (error) {
-    console.error('Error fetching daily analysis:', error);
-  }
-};
 
-const fetchImpact = async (campaignId) => {
-  try {
-    const res = await fetch(`/api/impact?campaignId=${campaignId}`);
-    const data = await res.json();
-    setImpact(data.impact);
-  } catch (error) {
-    console.error('Error fetching impact:', error);
-  }
-};
-
-const fetchSuggestions = async () => {
-  try {
-    const res = await fetch('/api/suggestions');
-    const data = await res.json();
-    setSuggestions(data);
-  } catch (error) {
-    console.error('Error fetching suggestions:', error);
-  }
-};
-
-  // Fetch analysis when campaign selected
-useEffect(() => {
-  if (selectedCampaign) {
-    fetchAnalysis(selectedCampaign.id);
-    fetchDailyAnalysis(selectedCampaign.id);
-    fetchImpact(selectedCampaign.id);
-  }
-}, [selectedCampaign]);
-
-useEffect(() => {
-  fetchSuggestions();
-}, []);
-
-  const fetchCampaignSettings = async (campaignId) => {
-    try {
-      const res = await fetch(`/api/campaign-settings?campaignId=${campaignId}`);
-      const data = await res.json();
-      if (data.settings) {
-        setSettings({
-          autoOptimize: data.settings.auto_optimize || false,
-          maxBudgetIncrease: data.settings.max_budget_increase || 30,
-          maxBudgetDecrease: data.settings.max_budget_decrease || 30,
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching campaign settings:', error);
+  useEffect(() => {
+    if (selectedCampaign) {
+      fetchAnalysis(selectedCampaign.id);
+      fetchCampaignSettings(selectedCampaign.id);
+      fetchDailyAnalysis(selectedCampaign.id);
+      fetchImpact(selectedCampaign.id);
     }
-  };
+  }, [selectedCampaign]);
 
   const fetchCampaigns = async () => {
     try {
       const res = await fetch('/api/campaigns');
       const data = await res.json();
       setCampaigns(data.campaigns || []);
-      if (data.campaigns?.length > 0 && !selectedCampaign) {
+      if (data.campaigns?.length > 0) {
         setSelectedCampaign(data.campaigns[0]);
       }
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching campaigns:', error);
-    } finally {
       setLoading(false);
     }
   };
@@ -143,692 +57,612 @@ useEffect(() => {
     }
   };
 
-  const fetchRecommendations = async () => {
+  const fetchCampaignSettings = async (campaignId) => {
     try {
-      const res = await fetch('/api/recommendations');
+      const res = await fetch(`/api/campaign-settings?campaignId=${campaignId}`);
       const data = await res.json();
-      setRecommendations(data.recommendations || []);
+      if (data.settings) {
+        setSettings({
+          autoOptimize: data.settings.auto_optimize || false,
+          maxBudgetIncrease: data.settings.max_budget_increase || 30,
+          maxBudgetDecrease: data.settings.max_budget_decrease || 30,
+        });
+      } else {
+        setSettings({
+          autoOptimize: false,
+          maxBudgetIncrease: 30,
+          maxBudgetDecrease: 30,
+        });
+      }
     } catch (error) {
-      console.error('Error fetching recommendations:', error);
+      console.error('Error fetching campaign settings:', error);
     }
   };
 
-  const syncData = async () => {
+  const saveCampaignSettings = async (campaignId, newSettings) => {
+    try {
+      await fetch('/api/campaign-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaign_id: campaignId,
+          auto_optimize: newSettings.autoOptimize,
+          max_budget_increase: newSettings.maxBudgetIncrease,
+          max_budget_decrease: newSettings.maxBudgetDecrease,
+        }),
+      });
+    } catch (error) {
+      console.error('Error saving campaign settings:', error);
+    }
+  };
+
+  const fetchDailyAnalysis = async (campaignId) => {
+    try {
+      const res = await fetch(`/api/daily-analysis?campaignId=${campaignId}`);
+      const data = await res.json();
+      setDailyAnalysis(data);
+    } catch (error) {
+      console.error('Error fetching daily analysis:', error);
+    }
+  };
+
+  const fetchImpact = async (campaignId) => {
+    try {
+      const res = await fetch(`/api/impact?campaignId=${campaignId}`);
+      const data = await res.json();
+      setImpact(data.impact);
+    } catch (error) {
+      console.error('Error fetching impact:', error);
+    }
+  };
+
+  const fetchSuggestions = async () => {
+    try {
+      const res = await fetch('/api/suggestions');
+      const data = await res.json();
+      setSuggestions(data);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+    }
+  };
+
+  const handleSync = async () => {
     setSyncing(true);
     try {
       const res = await fetch('/api/sync', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        setLastSync(new Date());
-        fetchCampaigns();
+        setLastSync(new Date().toLocaleTimeString());
+        await fetchCampaigns();
         if (selectedCampaign) {
-          fetchAnalysis(selectedCampaign.id);
+          await fetchAnalysis(selectedCampaign.id);
+          await fetchDailyAnalysis(selectedCampaign.id);
+          await fetchImpact(selectedCampaign.id);
         }
       }
     } catch (error) {
-      console.error('Error syncing data:', error);
-    } finally {
-      setSyncing(false);
+      console.error('Error syncing:', error);
     }
+    setSyncing(false);
   };
 
-  const applyRecommendation = async (recId, action) => {
-    try {
-      const res = await fetch('/api/apply-recommendation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recommendationId: recId, action }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchRecommendations();
-        fetchCampaigns();
-      }
-    } catch (error) {
-      console.error('Error applying recommendation:', error);
-    }
+  const getScoreColor = (score) => {
+    if (score >= 70) return '#22c55e';
+    if (score >= 50) return '#eab308';
+    if (score >= 30) return '#f97316';
+    return '#ef4444';
   };
 
-  const getRecommendationBadge = (rec) => {
-    switch (rec) {
-      case 'increase': return <span className="badge badge-green">↑ Increase</span>;
-      case 'decrease': return <span className="badge badge-red">↓ Decrease</span>;
-      case 'maintain': return <span className="badge badge-yellow">→ Maintain</span>;
-      case 'monitor': return <span className="badge badge-orange">⚠ Monitor</span>;
-      default: return <span className="badge badge-blue">—</span>;
-    }
+  const getActionBadge = (action) => {
+    const styles = {
+      INCREASE: 'bg-green-500/20 text-green-400',
+      MAINTAIN: 'bg-blue-500/20 text-blue-400',
+      DECREASE: 'bg-red-500/20 text-red-400',
+      MONITOR: 'bg-yellow-500/20 text-yellow-400',
+    };
+    const icons = {
+      INCREASE: '↑',
+      MAINTAIN: '→',
+      DECREASE: '↓',
+      MONITOR: '⚠',
+    };
+    return (
+      <span className={`px-2 py-1 rounded text-xs font-medium ${styles[action] || styles.MONITOR}`}>
+        {icons[action]} {action}
+      </span>
+    );
   };
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(value || 0);
   };
 
-  const formatPercent = (value) => `${value.toFixed(2)}%`;
+  const summary = analysis?.summary || {};
+  const hourlyData = analysis?.hourlyBreakdown || [];
+  const recommendations = analysis?.recommendations || [];
 
   return (
-    <>
+    <div className="min-h-screen bg-dark-900 text-white">
       <Head>
-        <title>Meta Ads Optimizer | Dashboard</title>
+        <title>Meta Ads Optimizer</title>
+        <meta name="description" content="AI-Powered Budget Optimization" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="min-h-screen bg-dark-900">
-        {/* Header */}
-        <header className="border-b border-white/10 bg-dark-800">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                  <span className="text-xl">📊</span>
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold">Meta Ads Optimizer</h1>
-                  <p className="text-sm text-gray-400">AI-Powered Budget Optimization</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <div className="text-sm text-gray-400">
-                  {lastSync && `Last sync: ${lastSync.toLocaleTimeString()}`}
-                </div>
-                <button 
-                  onClick={syncData}
-                  disabled={syncing}
-                  className="btn btn-primary"
-                >
-                  {syncing ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Syncing...
-                    </>
-                  ) : (
-                    <>🔄 Sync Data</>
-                  )}
-                </button>
-              </div>
+      <header className="border-b border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+              <span className="text-xl">📊</span>
+            </div>
+            <div>
+              <h1 className="font-bold text-lg">Meta Ads Optimizer</h1>
+              <p className="text-xs text-gray-400">AI-Powered Budget Optimization</p>
             </div>
           </div>
-        </header>
+          <div className="flex items-center gap-4">
+            {lastSync && (
+              <span className="text-xs text-gray-400">Last sync: {lastSync}</span>
+            )}
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              <span className={syncing ? 'animate-spin' : ''}>🔄</span>
+              {syncing ? 'Syncing...' : 'Sync Data'}
+            </button>
+          </div>
+        </div>
+      </header>
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Campaign Selector */}
-          <div className="mb-8">
-            <label className="block text-sm font-medium text-gray-400 mb-2">Select Campaign</label>
-            <div className="flex gap-2 flex-wrap">
-              {campaigns.map(campaign => (
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Campaign Selector */}
+        <div className="mb-6">
+          <h2 className="text-sm font-medium text-gray-400 mb-2">Select Campaign</h2>
+          {campaigns.length === 0 ? (
+            <p className="text-gray-500">No campaigns found. Click "Sync Data" to fetch from Meta.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {campaigns.map((campaign) => (
                 <button
                   key={campaign.id}
                   onClick={() => setSelectedCampaign(campaign)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     selectedCampaign?.id === campaign.id
                       ? 'bg-purple-600 text-white'
-                      : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                      : 'bg-dark-800 text-gray-300 hover:bg-dark-700'
                   }`}
                 >
                   {campaign.name}
                 </button>
               ))}
-              {campaigns.length === 0 && !loading && (
-                <p className="text-gray-500">No campaigns found. Click "Sync Data" to fetch from Meta.</p>
-              )}
-            </div>
-          </div>
-
-          {/* KPI Cards */}
-          {analysis?.overallMetrics && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
-              <div className="bg-dark-800 rounded-xl p-4 border border-white/5 card-hover">
-                <p className="text-xs text-gray-400 uppercase tracking-wider">Total Spend</p>
-                <p className="text-2xl font-bold font-mono text-blue-400">
-                  {formatCurrency(analysis.overallMetrics.totalSpend)}
-                </p>
-              </div>
-              <div className="bg-dark-800 rounded-xl p-4 border border-white/5 card-hover">
-                <p className="text-xs text-gray-400 uppercase tracking-wider">Purchases</p>
-                <p className="text-2xl font-bold font-mono text-purple-400">
-                  {analysis.overallMetrics.totalPurchases}
-                </p>
-              </div>
-              <div className="bg-dark-800 rounded-xl p-4 border border-white/5 card-hover">
-                <p className="text-xs text-gray-400 uppercase tracking-wider">Revenue</p>
-                <p className="text-2xl font-bold font-mono text-green-400">
-                  {formatCurrency(analysis.overallMetrics.totalRevenue)}
-                </p>
-              </div>
-              <div className="bg-dark-800 rounded-xl p-4 border border-white/5 card-hover">
-                <p className="text-xs text-gray-400 uppercase tracking-wider">ROAS</p>
-                <p className={`text-2xl font-bold font-mono ${
-                  analysis.overallMetrics.overallRoas >= 1 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {analysis.overallMetrics.overallRoas.toFixed(2)}x
-                </p>
-              </div>
-              <div className="bg-dark-800 rounded-xl p-4 border border-white/5 card-hover">
-                <p className="text-xs text-gray-400 uppercase tracking-wider">CPA</p>
-                <p className="text-2xl font-bold font-mono text-yellow-400">
-                  {formatCurrency(analysis.overallMetrics.overallCpa)}
-                </p>
-              </div>
-              <div className="bg-dark-800 rounded-xl p-4 border border-white/5 card-hover">
-                <p className="text-xs text-gray-400 uppercase tracking-wider">Period</p>
-                <p className="text-lg font-bold">{analysis.period}</p>
-              </div>
             </div>
           )}
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Chart */}
-            <div className="lg:col-span-2">
-              <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
-                <h2 className="text-lg font-semibold mb-4">Hourly Performance</h2>
-                {analysis?.hourlyAnalysis && (
-                  <ResponsiveContainer width="100%" height={350}>
-                    <BarChart data={analysis.hourlyAnalysis.sort((a, b) => a.hour - b.hour)}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
-                      <XAxis 
-                        dataKey="hour" 
-                        stroke="#8888a0"
-                        tickFormatter={(h) => `${h}:00`}
-                      />
-                      <YAxis yAxisId="left" stroke="#8888a0" />
-                      <YAxis yAxisId="right" orientation="right" stroke="#a855f7" />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#12121a', 
-                          border: '1px solid #2a2a3a',
-                          borderRadius: '8px'
-                        }}
-                        formatter={(value, name) => {
-                          if (name === 'ROAS') return [value.toFixed(2) + 'x', name];
-                          if (name === 'CPA') return ['$' + value.toFixed(2), name];
-                          if (name === 'Score') return [value, name];
-                          return [value, name];
-                        }}
-                      />
-                      <Legend />
-                      <Bar 
-                        yAxisId="left"
-                        dataKey="scores.composite" 
-                        name="Score"
-                        fill="#3b82f6"
-                        radius={[4, 4, 0, 0]}
-                      />
-                      <Line 
-                        yAxisId="right"
-                        type="monotone" 
-                        dataKey="metrics.roas" 
-                        name="ROAS"
-                        stroke="#22c55e" 
-                        strokeWidth={2}
-                        dot={{ fill: '#22c55e' }}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+        {selectedCampaign && analysis && (
+          <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+              <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
+                <p className="text-xs text-gray-400 mb-1">TOTAL SPEND</p>
+                <p className="text-xl font-bold text-purple-400">{formatCurrency(summary.totalSpend)}</p>
+              </div>
+              <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
+                <p className="text-xs text-gray-400 mb-1">PURCHASES</p>
+                <p className="text-xl font-bold text-blue-400">{summary.totalPurchases || 0}</p>
+              </div>
+              <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
+                <p className="text-xs text-gray-400 mb-1">REVENUE</p>
+                <p className="text-xl font-bold text-green-400">{formatCurrency(summary.totalRevenue)}</p>
+              </div>
+              <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
+                <p className="text-xs text-gray-400 mb-1">ROAS</p>
+                <p className={`text-xl font-bold ${summary.avgRoas >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+                  {(summary.avgRoas || 0).toFixed(2)}x
+                </p>
+              </div>
+              <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
+                <p className="text-xs text-gray-400 mb-1">CPA</p>
+                <p className="text-xl font-bold text-orange-400">{formatCurrency(summary.avgCpa)}</p>
+              </div>
+              <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
+                <p className="text-xs text-gray-400 mb-1">PERIOD</p>
+                <p className="text-lg font-bold text-gray-300">Last 14 days</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Main Content */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Hourly Performance Chart */}
+                <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
+                  <h3 className="text-lg font-semibold mb-4">Hourly Performance</h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={hourlyData}>
+                        <XAxis 
+                          dataKey="hour" 
+                          tick={{ fill: '#9ca3af', fontSize: 12 }}
+                          tickFormatter={(h) => `${h}:00`}
+                        />
+                        <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#1f2937',
+                            border: 'none',
+                            borderRadius: '8px',
+                          }}
+                          formatter={(value, name) => [value, name === 'score' ? 'Score' : name]}
+                          labelFormatter={(h) => `Hour: ${h}:00`}
+                        />
+                        <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                          {hourlyData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={getScoreColor(entry.score)} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex justify-center mt-2">
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                      <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                      <span>Score</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Hourly Breakdown Table */}
+                <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
+                  <h3 className="text-lg font-semibold mb-4">Hourly Breakdown</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-gray-400 border-b border-white/10">
+                          <th className="text-left py-2 px-2">HOUR</th>
+                          <th className="text-right py-2 px-2">SPEND</th>
+                          <th className="text-right py-2 px-2">PURCHASES</th>
+                          <th className="text-right py-2 px-2">ROAS</th>
+                          <th className="text-right py-2 px-2">CPA</th>
+                          <th className="text-right py-2 px-2">SCORE</th>
+                          <th className="text-right py-2 px-2">ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hourlyData.map((row) => (
+                          <tr key={row.hour} className="border-b border-white/5 hover:bg-white/5">
+                            <td className="py-2 px-2 font-medium">{String(row.hour).padStart(2, '0')}:00</td>
+                            <td className="text-right py-2 px-2">{formatCurrency(row.spend)}</td>
+                            <td className="text-right py-2 px-2">{row.purchases}</td>
+                            <td className={`text-right py-2 px-2 ${row.roas >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+                              {row.roas?.toFixed(2)}x
+                            </td>
+                            <td className="text-right py-2 px-2">{formatCurrency(row.cpa)}</td>
+                            <td className="text-right py-2 px-2">{row.score}</td>
+                            <td className="text-right py-2 px-2">{getActionBadge(row.action)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Day of Week Performance */}
+                {dailyAnalysis && (
+                  <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <span>📅</span> Day-of-Week Performance
+                    </h3>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="bg-green-500/10 rounded-lg p-3">
+                        <p className="text-xs text-gray-400">Best Days</p>
+                        <p className="text-green-400 font-semibold">
+                          {dailyAnalysis.best_days?.length > 0 ? dailyAnalysis.best_days.join(', ') : 'Analyzing...'}
+                        </p>
+                      </div>
+                      <div className="bg-red-500/10 rounded-lg p-3">
+                        <p className="text-xs text-gray-400">Worst Days</p>
+                        <p className="text-red-400 font-semibold">
+                          {dailyAnalysis.worst_days?.length > 0 ? dailyAnalysis.worst_days.join(', ') : 'None'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-gray-400 border-b border-white/10">
+                            <th className="text-left py-2">DAY</th>
+                            <th className="text-right py-2">AVG SPEND</th>
+                            <th className="text-right py-2">ROAS</th>
+                            <th className="text-right py-2">CPA</th>
+                            <th className="text-right py-2">SCORE</th>
+                            <th className="text-right py-2">ACTION</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dailyAnalysis.daily_breakdown?.map((day) => (
+                            <tr key={day.day_name} className="border-b border-white/5">
+                              <td className="py-2 font-medium">{day.day_name}</td>
+                              <td className="text-right">${day.avg_spend}</td>
+                              <td className={`text-right ${parseFloat(day.roas) >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+                                {day.roas}x
+                              </td>
+                              <td className="text-right">${day.cpa}</td>
+                              <td className="text-right">{day.score}</td>
+                              <td className="text-right">
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  day.recommendation === 'INCREASE' ? 'bg-green-500/20 text-green-400' :
+                                  day.recommendation === 'DECREASE' ? 'bg-red-500/20 text-red-400' :
+                                  'bg-yellow-500/20 text-yellow-400'
+                                }`}>
+                                  {day.recommendation}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {dailyAnalysis.recommendation && (
+                      <div className="mt-4 p-3 bg-blue-500/10 rounded-lg">
+                        <p className="text-sm text-blue-400">💡 {dailyAnalysis.recommendation}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Auto-Optimize Impact */}
+                {impact && impact.auto_optimize_enabled_at && (
+                  <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <span>📈</span> Auto-Optimize Impact
+                    </h3>
+                    
+                    <p className="text-sm text-gray-400 mb-4">
+                      Performance since auto-optimize enabled
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-dark-700 rounded-lg p-4">
+                        <p className="text-xs text-gray-400">ROAS</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-gray-500 line-through">{parseFloat(impact.before_roas).toFixed(2)}x</span>
+                          <span className="text-xl font-bold text-green-400">{parseFloat(impact.after_roas).toFixed(2)}x</span>
+                        </div>
+                        <p className="text-sm text-green-400">+{impact.roas_improvement}%</p>
+                      </div>
+
+                      <div className="bg-dark-700 rounded-lg p-4">
+                        <p className="text-xs text-gray-400">CPA</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-gray-500 line-through">${parseFloat(impact.before_cpa).toFixed(2)}</span>
+                          <span className="text-xl font-bold text-green-400">${parseFloat(impact.after_cpa).toFixed(2)}</span>
+                        </div>
+                        <p className="text-sm text-green-400">-{impact.cpa_improvement}%</p>
+                      </div>
+
+                      <div className="bg-dark-700 rounded-lg p-4">
+                        <p className="text-xs text-gray-400">EXTRA PROFIT</p>
+                        <p className="text-2xl font-bold text-green-400">
+                          +${parseFloat(impact.total_extra_profit).toFixed(2)}
+                        </p>
+                        <p className="text-sm text-gray-400">since enabled</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Suggestions */}
+                {suggestions && (
+                  <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <span>🤖</span> Latest Optimization Tips
+                    </h3>
+
+                    <div className="mb-6">
+                      <h4 className="text-sm font-medium text-gray-400 mb-3">📺 From YouTube Experts</h4>
+                      <div className="space-y-3">
+                        {suggestions.youtube_tips?.map((tip, index) => (
+                          <div key={index} className="bg-dark-700 rounded-lg p-3">
+                            <p className="font-medium text-sm">{tip.title}</p>
+                            <p className="text-xs text-gray-400">— {tip.source}</p>
+                            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mb-6">
+                      <h4 className="text-sm font-medium text-gray-400 mb-3">🌐 From the Web</h4>
+                      <div className="space-y-3">
+                        {suggestions.web_tips?.map((tip, index) => (
+                          <div key={index} className="bg-dark-700 rounded-lg p-3">
+                            <p className="font-medium text-sm">{tip.title}</p>
+                            <p className="text-xs text-gray-400">— {tip.source}</p>
+                            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-400 mb-3">⚡ Quick Wins</h4>
+                      <ul className="space-y-2">
+                        {suggestions.general_recommendations?.map((tip, index) => (
+                          <li key={index} className="text-sm text-gray-300 flex items-start gap-2">
+                            <span className="text-green-400">✓</span>
+                            {tip}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {/* Hourly Table */}
-              <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
-                <h2 className="text-lg font-semibold mb-4">Hourly Breakdown</h2>
-                <div className="overflow-x-auto">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Hour</th>
-                        <th>Spend</th>
-                        <th>Purchases</th>
-                        <th>ROAS</th>
-                        <th>CPA</th>
-                        <th>Score</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analysis?.hourlyAnalysis?.map(h => (
-                        <tr key={h.hour}>
-                          <td className="font-mono">{String(h.hour).padStart(2, '0')}:00</td>
-                          <td className="font-mono">{formatCurrency(h.metrics.spend)}</td>
-                          <td>{h.metrics.purchases}</td>
-                          <td className={`font-mono ${h.metrics.roas >= 1 ? 'text-green-400' : 'text-red-400'}`}>
-                            {h.metrics.roas.toFixed(2)}x
-                          </td>
-                          <td className="font-mono">{formatCurrency(h.metrics.cpa)}</td>
-                          <td>{h.scores.composite}</td>
-                          <td>{getRecommendationBadge(h.recommendation)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                        {/* Day of Week Performance */}
-{dailyAnalysis && (
-  <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
-    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-      <span>📅</span> Day-of-Week Performance
-    </h3>
-    
-    <div className="grid grid-cols-2 gap-4 mb-4">
-      <div className="bg-green-500/10 rounded-lg p-3">
-        <p className="text-xs text-gray-400">Best Days</p>
-        <p className="text-green-400 font-semibold">
-          {dailyAnalysis.best_days?.length > 0 ? dailyAnalysis.best_days.join(', ') : 'Analyzing...'}
-        </p>
-      </div>
-      <div className="bg-red-500/10 rounded-lg p-3">
-        <p className="text-xs text-gray-400">Worst Days</p>
-        <p className="text-red-400 font-semibold">
-          {dailyAnalysis.worst_days?.length > 0 ? dailyAnalysis.worst_days.join(', ') : 'None'}
-        </p>
-      </div>
-    </div>
-
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-gray-400 border-b border-white/10">
-            <th className="text-left py-2">DAY</th>
-            <th className="text-right py-2">AVG SPEND</th>
-            <th className="text-right py-2">ROAS</th>
-            <th className="text-right py-2">CPA</th>
-            <th className="text-right py-2">SCORE</th>
-            <th className="text-right py-2">ACTION</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dailyAnalysis.daily_breakdown?.map((day) => (
-            <tr key={day.day_name} className="border-b border-white/5">
-              <td className="py-2 font-medium">{day.day_name}</td>
-              <td className="text-right">${day.avg_spend}</td>
-              <td className={`text-right ${parseFloat(day.roas) >= 1 ? 'text-green-400' : 'text-red-400'}`}>
-                {day.roas}x
-              </td>
-              <td className="text-right">${day.cpa}</td>
-              <td className="text-right">{day.score}</td>
-              <td className="text-right">
-                <span className={`px-2 py-1 rounded text-xs ${
-                  day.recommendation === 'INCREASE' ? 'bg-green-500/20 text-green-400' :
-                  day.recommendation === 'DECREASE' ? 'bg-red-500/20 text-red-400' :
-                  'bg-yellow-500/20 text-yellow-400'
-                }`}>
-                  {day.recommendation}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-
-    {dailyAnalysis.recommendation && (
-      <div className="mt-4 p-3 bg-blue-500/10 rounded-lg">
-        <p className="text-sm text-blue-400">💡 {dailyAnalysis.recommendation}</p>
-      </div>
-    )}
-  </div>
-)}
-
-{/* Auto-Optimize Impact */}
-{impact && impact.auto_optimize_enabled_at && (
-  <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
-    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-      <span>📈</span> Auto-Optimize Impact
-    </h3>
-    
-    <p className="text-sm text-gray-400 mb-4">
-      Performance since auto-optimize enabled
-    </p>
-
-    <div className="grid grid-cols-3 gap-4">
-      <div className="bg-dark-700 rounded-lg p-4">
-        <p className="text-xs text-gray-400">ROAS</p>
-        <div className="flex items-baseline gap-2">
-          <span className="text-gray-500 line-through">{parseFloat(impact.before_roas).toFixed(2)}x</span>
-          <span className="text-xl font-bold text-green-400">{parseFloat(impact.after_roas).toFixed(2)}x</span>
-        </div>
-        <p className="text-sm text-green-400">+{impact.roas_improvement}%</p>
-      </div>
-
-      <div className="bg-dark-700 rounded-lg p-4">
-        <p className="text-xs text-gray-400">CPA</p>
-        <div className="flex items-baseline gap-2">
-          <span className="text-gray-500 line-through">${parseFloat(impact.before_cpa).toFixed(2)}</span>
-          <span className="text-xl font-bold text-green-400">${parseFloat(impact.after_cpa).toFixed(2)}</span>
-        </div>
-        <p className="text-sm text-green-400">-{impact.cpa_improvement}%</p>
-      </div>
-
-      <div className="bg-dark-700 rounded-lg p-4">
-        <p className="text-xs text-gray-400">EXTRA PROFIT</p>
-        <p className="text-2xl font-bold text-green-400">
-          +${parseFloat(impact.total_extra_profit).toFixed(2)}
-        </p>
-        <p className="text-sm text-gray-400">since enabled</p>
-      </div>
-    </div>
-  </div>
-)}
-
-{/* AI Suggestions */}
-{suggestions && (
-  <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
-    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-      <span>🤖</span> Latest Optimization Tips
-    </h3>
-
-    <div className="mb-6">
-      <h4 className="text-sm font-medium text-gray-400 mb-3">📺 From YouTube Experts</h4>
-      <div className="space-y-3">
-        {suggestions.youtube_tips?.map((tip, index) => (
-          <div key={index} className="bg-dark-700 rounded-lg p-3">
-            <p className="font-medium text-sm">{tip.title}</p>
-            <p className="text-xs text-gray-400">— {tip.source}</p>
-            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-
-    <div className="mb-6">
-      <h4 className="text-sm font-medium text-gray-400 mb-3">🌐 From the Web</h4>
-      <div className="space-y-3">
-        {suggestions.web_tips?.map((tip, index) => (
-          <div key={index} className="bg-dark-700 rounded-lg p-3">
-            <p className="font-medium text-sm">{tip.title}</p>
-            <p className="text-xs text-gray-400">— {tip.source}</p>
-            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-
-    <div>
-      <h4 className="text-sm font-medium text-gray-400 mb-3">⚡ Quick Wins</h4>
-      <ul className="space-y-2">
-        {suggestions.general_recommendations?.map((tip, index) => (
-          <li key={index} className="text-sm text-gray-300 flex items-start gap-2">
-            <span className="text-green-400">✓</span>
-            {tip}
-          </li>
-        ))}
-      </ul>
-    </div>
-  </div>
-)}
-                </div>
-              </div>
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Summary Card */}
-              {analysis?.summary && (
-                <div className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 rounded-xl p-6 border border-purple-500/20">
+              {/* Sidebar */}
+              <div className="space-y-6">
+                {/* Quick Summary */}
+                <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
                   <h3 className="font-semibold mb-4 flex items-center gap-2">
                     <span>🎯</span> Quick Summary
                   </h3>
-                  <div className="space-y-3 text-sm">
+                  <div className="space-y-3">
                     <div>
-                      <p className="text-gray-400">Best Hours</p>
-                      <p className="text-green-400 font-mono">{analysis.summary.peakPerformanceHours || 'Analyzing...'}</p>
+                      <p className="text-xs text-gray-400">Best Hours</p>
+                      <p className="text-green-400 font-medium">
+                        {analysis?.insights?.bestHours?.join(', ') || 'Analyzing...'}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-gray-400">Worst Hours</p>
-                      <p className="text-red-400 font-mono">{analysis.summary.underperformingHours || 'Analyzing...'}</p>
+                      <p className="text-xs text-gray-400">Worst Hours</p>
+                      <p className="text-red-400 font-medium">
+                        {analysis?.insights?.worstHours?.join(', ') || 'Analyzing...'}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-gray-400">Top Recommendation</p>
-                      <p className="text-white">{analysis.summary.topRecommendation}</p>
+                      <p className="text-xs text-gray-400">Top Recommendation</p>
+                      <p className="text-gray-300 text-sm">
+                        {analysis?.insights?.topRecommendation || 'No immediate actions needed'}
+                      </p>
                     </div>
                   </div>
                 </div>
-              )}
 
-              {/* Recommendations */}
-              <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <span>💡</span> Recommendations
-                </h3>
-                <div className="space-y-3">
-                  {analysis?.recommendations?.map((rec, i) => (
-                    <div 
-                      key={i}
-                      className={`p-4 rounded-lg border ${
-                        rec.priority === 'urgent' ? 'border-red-500/50 bg-red-500/10' :
-                        rec.priority === 'high' ? 'border-yellow-500/50 bg-yellow-500/10' :
-                        'border-white/10 bg-white/5'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`badge ${
-                          rec.priority === 'urgent' ? 'badge-red' :
-                          rec.priority === 'high' ? 'badge-yellow' :
-                          'badge-blue'
-                        }`}>
-                          {rec.priority}
-                        </span>
-                        <span className="text-xs text-gray-400 uppercase">{rec.type.replace('_', ' ')}</span>
-                      </div>
-                      <p className="text-sm text-gray-300 mb-2">{rec.reason}</p>
-                      {rec.suggestedAction && (
-                        <p className="text-sm text-purple-400">{rec.suggestedAction}</p>
-                      )}
-                      {rec.percentChange && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="text-xs text-gray-400">Budget change:</span>
-                          <span className={`font-mono font-bold ${
-                            rec.percentChange > 0 ? 'text-green-400' : 'text-red-400'
-                          }`}>
-                            {rec.percentChange > 0 ? '+' : ''}{rec.percentChange}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {(!analysis?.recommendations || analysis.recommendations.length === 0) && (
+                {/* Recommendations */}
+                <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
+                  <h3 className="font-semibold mb-4 flex items-center gap-2">
+                    <span>💡</span> Recommendations
+                  </h3>
+                  {recommendations.length === 0 ? (
                     <p className="text-gray-500 text-sm">No recommendations yet. Sync data to analyze.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {recommendations.slice(0, 3).map((rec, index) => (
+                        <div
+                          key={index}
+                          className={`p-3 rounded-lg ${
+                            rec.priority === 'high'
+                              ? 'bg-purple-500/10 border border-purple-500/20'
+                              : 'bg-dark-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              rec.priority === 'high' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {rec.priority}
+                            </span>
+                            <span className="text-xs text-gray-400">{rec.type}</span>
+                          </div>
+                          <p className="text-sm text-gray-300">{rec.reason}</p>
+                          {rec.suggestedChange && (
+                            <p className="text-xs text-green-400 mt-1">
+                              Budget change: {rec.suggestedChange > 0 ? '+' : ''}{rec.suggestedChange}%
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </div>
 
-            {/* Campaign Settings */}
-<div className="bg-dark-800 rounded-xl p-6 border border-white/5">
-  <h3 className="font-semibold mb-4 flex items-center gap-2">
-    <span>⚙️</span> Campaign Settings
-  </h3>
-  {selectedCampaign && (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <label className="text-sm text-gray-300">Auto-Optimize This Campaign</label>
-        <button
-          onClick={async () => {
-            const newValue = !settings.autoOptimize;
-            setSettings(s => ({ ...s, autoOptimize: newValue }));
-            await fetch('/api/campaign-settings', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                campaign_id: selectedCampaign.id,
-                auto_optimize: newValue,
-                max_budget_increase: settings.maxBudgetIncrease,
-                max_budget_decrease: settings.maxBudgetDecrease,
-              }),
-            });
-          }}
-          className={`toggle ${settings.autoOptimize ? 'toggle-enabled' : 'toggle-disabled'}`}
-        >
-          <span className={`toggle-knob ${settings.autoOptimize ? 'translate-x-5' : 'translate-x-1'}`} />
-        </button>
-      </div>
-      <div>
-        <label className="text-sm text-gray-400 block mb-1">Max Budget Increase</label>
-        <input
-          type="range"
-          min="10"
-          max="50"
-          value={settings.maxBudgetIncrease}
-          onChange={async (e) => {
-            const value = parseInt(e.target.value);
-            setSettings(s => ({ ...s, maxBudgetIncrease: value }));
-            await fetch('/api/campaign-settings', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                campaign_id: selectedCampaign.id,
-                auto_optimize: settings.autoOptimize,
-                max_budget_increase: value,
-                max_budget_decrease: settings.maxBudgetDecrease,
-              }),
-            });
-          }}
-          className="w-full"
-        />
-        <span className="text-sm font-mono">{settings.maxBudgetIncrease}%</span>
-      </div>
-      <div>
-        <label className="text-sm text-gray-400 block mb-1">Max Budget Decrease</label>
-        <input
-          type="range"
-          min="10"
-          max="50"
-          value={settings.maxBudgetDecrease}
-          onChange={async (e) => {
-            const value = parseInt(e.target.value);
-            setSettings(s => ({ ...s, maxBudgetDecrease: value }));
-            await fetch('/api/campaign-settings', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                campaign_id: selectedCampaign.id,
-                auto_optimize: settings.autoOptimize,
-                max_budget_increase: settings.maxBudgetIncrease,
-                max_budget_decrease: value,
-              }),
-            });
-          }}
-          className="w-full"
-        />
-        <span className="text-sm font-mono">{settings.maxBudgetDecrease}%</span>
-      </div>
-    </div>
-  )}
-</div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm text-gray-300">Auto-Optimize</label>
-                    <button
-                     onClick={() => {
-  const newSettings = { ...settings, autoOptimize: !settings.autoOptimize };
-  setSettings(newSettings);
-  saveSettings(newSettings);
-}}
-                      className={`toggle ${settings.autoOptimize ? 'toggle-enabled' : 'toggle-disabled'}`}
-                    >
-                      <span className={`toggle-knob ${settings.autoOptimize ? 'translate-x-5' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-400 block mb-1">Max Budget Increase</label>
-                    <input
-                      type="range"
-                      min="10"
-                      max="50"
-                      value={settings.maxBudgetIncrease}
-                      onChange={(e) => setSettings(s => ({ ...s, maxBudgetIncrease: e.target.value }))}
-                      className="w-full"
-                    />
-                    <span className="text-sm font-mono">{settings.maxBudgetIncrease}%</span>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-400 block mb-1">Max Budget Decrease</label>
-                    <input
-                      type="range"
-                      min="10"
-                      max="50"
-                      value={settings.maxBudgetDecrease}
-                      onChange={(e) => setSettings(s => ({ ...s, maxBudgetDecrease: e.target.value }))}
-                      className="w-full"
-                    />
-                    <span className="text-sm font-mono">{settings.maxBudgetDecrease}%</span>
+                {/* Settings */}
+                <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
+                  <h3 className="font-semibold mb-4 flex items-center gap-2">
+                    <span>⚙️</span> Settings
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm text-gray-300">Auto-Optimize</label>
+                      <button
+                        onClick={async () => {
+                          const newSettings = { ...settings, autoOptimize: !settings.autoOptimize };
+                          setSettings(newSettings);
+                          if (selectedCampaign) {
+                            await saveCampaignSettings(selectedCampaign.id, newSettings);
+                            if (newSettings.autoOptimize) {
+                              await fetch('/api/impact', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  campaign_id: selectedCampaign.id,
+                                  action: 'enable',
+                                }),
+                              });
+                            }
+                            fetchImpact(selectedCampaign.id);
+                          }
+                        }}
+                        className={`relative w-12 h-6 rounded-full transition-colors ${
+                          settings.autoOptimize ? 'bg-green-500' : 'bg-gray-600'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                            settings.autoOptimize ? 'translate-x-7' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-1">Max Budget Increase</label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="50"
+                        value={settings.maxBudgetIncrease}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value);
+                          const newSettings = { ...settings, maxBudgetIncrease: value };
+                          setSettings(newSettings);
+                          if (selectedCampaign) {
+                            saveCampaignSettings(selectedCampaign.id, newSettings);
+                          }
+                        }}
+                        className="w-full accent-purple-500"
+                      />
+                      <span className="text-sm font-mono">{settings.maxBudgetIncrease}%</span>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-1">Max Budget Decrease</label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="50"
+                        value={settings.maxBudgetDecrease}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value);
+                          const newSettings = { ...settings, maxBudgetDecrease: value };
+                          setSettings(newSettings);
+                          if (selectedCampaign) {
+                            saveCampaignSettings(selectedCampaign.id, newSettings);
+                          }
+                        }}
+                        className="w-full accent-purple-500"
+                      />
+                      <span className="text-sm font-mono">{settings.maxBudgetDecrease}%</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          </>
+        )}
+
+        {loading && (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin text-4xl">🔄</div>
           </div>
-        </main>
-      </div>
-    </>
+        )}
+      </main>
+    </div>
   );
 }
-const [suggestions, setSuggestions] = useState(null);
-const fetchSuggestions = async () => {
-  try {
-    const res = await fetch('/api/suggestions');
-    const data = await res.json();
-    setSuggestions(data);
-  } catch (error) {
-    console.error('Error fetching suggestions:', error);
-  }
-};
-useEffect(() => {
-  fetchSuggestions();
-}, []);
-{/* AI Suggestions */}
-{suggestions && (
-  <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
-    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-      <span>🤖</span> Latest Optimization Tips
-      <span className="text-xs text-gray-500 ml-auto">
-        Updated: {new Date(suggestions.updated_at).toLocaleDateString()}
-      </span>
-    </h3>
-
-    {/* YouTube Tips */}
-    <div className="mb-6">
-      <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
-        <span>📺</span> From YouTube Experts
-      </h4>
-      <div className="space-y-3">
-        {suggestions.youtube_tips?.map((tip, index) => (
-          <div key={index} className="bg-dark-700 rounded-lg p-3">
-            <p className="font-medium text-sm">{tip.title}</p>
-            <p className="text-xs text-gray-400">— {tip.source}</p>
-            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-
-    {/* Web Tips */}
-    <div className="mb-6">
-      <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
-        <span>🌐</span> From the Web
-      </h4>
-      <div className="space-y-3">
-        {suggestions.web_tips?.map((tip, index) => (
-          <div key={index} className="bg-dark-700 rounded-lg p-3">
-            <p className="font-medium text-sm">{tip.title}</p>
-            <p className="text-xs text-gray-400">— {tip.source}</p>
-            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-
-    {/* Quick Tips */}
-    <div>
-      <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
-        <span>⚡</span> Quick Wins
-      </h4>
-      <ul className="space-y-2">
-        {suggestions.general_recommendations?.map((tip, index) => (
-          <li key={index} className="text-sm text-gray-300 flex items-start gap-2">
-            <span className="text-green-400">✓</span>
-            {tip}
-          </li>
-        ))}
-      </ul>
-    </div>
-  </div>
-)}
