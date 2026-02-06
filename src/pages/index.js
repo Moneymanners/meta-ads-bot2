@@ -182,12 +182,13 @@ export default function Home() {
     }).format(value || 0);
   };
 
-  // Map analysis data to display format - FIXED FIELD MAPPING
-  const totalSpend = analysis?.totalSpend || 0;
-  const totalPurchases = analysis?.totalPurchases || 0;
-  const totalRevenue = analysis?.totalRevenue || 0;
-  const overallRoas = analysis?.overallRoas || 0;
-  const overallCpa = analysis?.overallCpa || 0;
+  // FIXED: Map analysis data - API returns overallMetrics object
+  const metrics = analysis?.overallMetrics || {};
+  const totalSpend = metrics.totalSpend || analysis?.totalSpend || 0;
+  const totalPurchases = metrics.totalPurchases || analysis?.totalPurchases || 0;
+  const totalRevenue = metrics.totalRevenue || analysis?.totalRevenue || 0;
+  const overallRoas = metrics.overallRoas || analysis?.overallRoas || 0;
+  const overallCpa = metrics.overallCpa || analysis?.overallCpa || 0;
   
   // Map hourly data - API returns {hour, metrics: {spend, purchases, roas, cpa}, scores: {composite}, recommendation}
   const hourlyData = (analysis?.hourlyAnalysis || []).map(item => ({
@@ -282,7 +283,7 @@ export default function Home() {
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
                 <p className="text-xs text-gray-400 mb-1">ROAS</p>
                 <p className={`text-xl font-bold ${overallRoas >= 1 ? 'text-green-400' : 'text-red-400'}`}>
-                  {overallRoas.toFixed(2)}x
+                  {Number(overallRoas).toFixed(2)}x
                 </p>
               </div>
               <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
@@ -358,7 +359,7 @@ export default function Home() {
                             <td className="text-right py-2 px-2">{formatCurrency(row.spend)}</td>
                             <td className="text-right py-2 px-2">{row.purchases}</td>
                             <td className={`text-right py-2 px-2 ${row.roas >= 1 ? 'text-green-400' : 'text-red-400'}`}>
-                              {row.roas?.toFixed(2)}x
+                              {Number(row.roas).toFixed(2)}x
                             </td>
                             <td className="text-right py-2 px-2">{formatCurrency(row.cpa)}</td>
                             <td className="text-right py-2 px-2">{row.score}</td>
@@ -371,7 +372,7 @@ export default function Home() {
                 </div>
 
                 {/* Day of Week Performance */}
-                {dailyAnalysis && (
+                {dailyAnalysis && dailyAnalysis.daily_breakdown && (
                   <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
                     <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                       <span>📅</span> Day-of-Week Performance
@@ -405,7 +406,7 @@ export default function Home() {
                           </tr>
                         </thead>
                         <tbody>
-                          {dailyAnalysis.daily_breakdown?.map((day) => (
+                          {dailyAnalysis.daily_breakdown.map((day) => (
                             <tr key={day.day_name} className="border-b border-white/5">
                               <td className="py-2 font-medium">{day.day_name}</td>
                               <td className="text-right">${day.avg_spend}</td>
@@ -479,7 +480,7 @@ export default function Home() {
                 )}
 
                 {/* AI Suggestions */}
-                {suggestions && (
+                {suggestions && suggestions.youtube_tips && (
                   <div className="bg-dark-800 rounded-xl p-6 border border-white/5">
                     <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                       <span>🤖</span> Latest Optimization Tips
@@ -488,7 +489,7 @@ export default function Home() {
                     <div className="mb-6">
                       <h4 className="text-sm font-medium text-gray-400 mb-3">📺 From YouTube Experts</h4>
                       <div className="space-y-3">
-                        {suggestions.youtube_tips?.map((tip, index) => (
+                        {suggestions.youtube_tips.map((tip, index) => (
                           <div key={index} className="bg-dark-700 rounded-lg p-3">
                             <p className="font-medium text-sm">{tip.title}</p>
                             <p className="text-xs text-gray-400">— {tip.source}</p>
@@ -498,30 +499,34 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="mb-6">
-                      <h4 className="text-sm font-medium text-gray-400 mb-3">🌐 From the Web</h4>
-                      <div className="space-y-3">
-                        {suggestions.web_tips?.map((tip, index) => (
-                          <div key={index} className="bg-dark-700 rounded-lg p-3">
-                            <p className="font-medium text-sm">{tip.title}</p>
-                            <p className="text-xs text-gray-400">— {tip.source}</p>
-                            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
-                          </div>
-                        ))}
+                    {suggestions.web_tips && (
+                      <div className="mb-6">
+                        <h4 className="text-sm font-medium text-gray-400 mb-3">🌐 From the Web</h4>
+                        <div className="space-y-3">
+                          {suggestions.web_tips.map((tip, index) => (
+                            <div key={index} className="bg-dark-700 rounded-lg p-3">
+                              <p className="font-medium text-sm">{tip.title}</p>
+                              <p className="text-xs text-gray-400">— {tip.source}</p>
+                              <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-3">⚡ Quick Wins</h4>
-                      <ul className="space-y-2">
-                        {suggestions.general_recommendations?.map((tip, index) => (
-                          <li key={index} className="text-sm text-gray-300 flex items-start gap-2">
-                            <span className="text-green-400">✓</span>
-                            {tip}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    {suggestions.general_recommendations && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-400 mb-3">⚡ Quick Wins</h4>
+                        <ul className="space-y-2">
+                          {suggestions.general_recommendations.map((tip, index) => (
+                            <li key={index} className="text-sm text-gray-300 flex items-start gap-2">
+                              <span className="text-green-400">✓</span>
+                              {tip}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
