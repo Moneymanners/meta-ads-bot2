@@ -16,26 +16,57 @@ export default async function handler(req, res) {
     // Calculate date range
     const { fromDate, toDate } = getDateRange(dateRange, startDate, endDate);
     
-    // Fetch hourly data from database with date filter
+    console.log('Fetching data for:', { campaignId, dateRange, fromDate, toDate });
+    
+    // Fetch hourly data from database with campaign and date filter
     const { data: hourlyData, error } = await supabase
       .from('hourly_performance')
       .select('*')
-      .eq('campaign_id', campaignId)
+      .eq('campaign_id', String(campaignId))  // Ensure string comparison
       .gte('date', fromDate)
       .lte('date', toDate)
       .order('hour', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
+
+    console.log(`Found ${hourlyData?.length || 0} hourly records for campaign ${campaignId}`);
+
+    // If no data found for this campaign, return empty metrics
+    if (!hourlyData || hourlyData.length === 0) {
+      return res.status(200).json({
+        campaignId,
+        dateRange,
+        fromDate,
+        toDate,
+        overallMetrics: {
+          totalSpend: 0,
+          totalPurchases: 0,
+          totalRevenue: 0,
+          overallRoas: 0,
+          overallCpa: 0,
+        },
+        hourlyAnalysis: [],
+        summary: {
+          peakPerformanceHours: 'No data available',
+          underperformingHours: 'No data available',
+          topRecommendation: 'Sync data to start analyzing this campaign.',
+        },
+        recommendations: [],
+      });
+    }
 
     // Aggregate hourly data across all dates
-    const hourlyAggregated = aggregateHourlyData(hourlyData || []);
+    const hourlyAggregated = aggregateHourlyData(hourlyData);
     
     // Calculate overall metrics
-    const overallMetrics = calculateOverallMetrics(hourlyData || []);
+    const overallMetrics = calculateOverallMetrics(hourlyData);
     
     // Generate hourly analysis with scores
     const hourlyAnalysis = hourlyAggregated.map(hour => {
-      const scores = calculateScores(hour);
+      const scores = calculateScores(hour, overallMetrics);
       return {
         hour: hour.hour,
         metrics: {
@@ -68,7 +99,7 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('Analysis error:', error);
-    res.status(500).json({ error: 'Failed to analyze data' });
+    res.status(500).json({ error: 'Failed to analyze data', details: error.message });
   }
 }
 
@@ -152,8 +183,8 @@ function aggregateHourlyData(data) {
   }
   
   data.forEach(row => {
-    const hour = row.hour;
-    if (hourlyMap[hour]) {
+    const hour = parseInt(row.hour);
+    if (hourlyMap[hour] !== undefined) {
       hourlyMap[hour].spend += parseFloat(row.spend) || 0;
       hourlyMap[hour].purchases += parseInt(row.purchases) || 0;
       hourlyMap[hour].revenue += parseFloat(row.revenue) || 0;
@@ -184,15 +215,17 @@ function calculateOverallMetrics(data) {
   };
 }
 
-function calculateScores(hourData) {
+function calculateScores(hourData, overallMetrics) {
   // ROAS score (0-100)
   let roasScore = Math.min(100, hourData.roas * 50);
   
   // CPA score (inverse - lower is better)
-  let cpaScore = hourData.cpa > 0 ? Math.max(0, 100 - (hourData.cpa / 2)) : 50;
+  const avgCpa = overallMetrics.overallCpa || 20;
+  let cpaScore = hourData.cpa > 0 ? Math.max(0, 100 - ((hourData.cpa / avgCpa) * 50)) : 50;
   
-  // Volume score (based on purchases)
-  let volumeScore = Math.min(100, hourData.purchases * 10);
+  // Volume score (based on purchases relative to average)
+  const avgPurchases = overallMetrics.totalPurchases / 24 || 1;
+  let volumeScore = Math.min(100, (hourData.purchases / avgPurchases) * 50);
   
   // Composite score
   const composite = Math.round((roasScore * 0.4) + (cpaScore * 0.3) + (volumeScore * 0.3));
@@ -201,7 +234,7 @@ function calculateScores(hourData) {
     roas: Math.round(roasScore),
     cpa: Math.round(cpaScore),
     volume: Math.round(volumeScore),
-    composite,
+    composite: Math.max(0, Math.min(100, composite)),
   };
 }
 
@@ -213,17 +246,25 @@ function getRecommendation(score) {
 }
 
 function generateSummary(hourlyAnalysis) {
-  const sortedByScore = [...hourlyAnalysis].sort((a, b) => b.scores.composite - a.scores.composite);
+  const validHours = hourlyAnalysis.filter(h => h.metrics.spend > 0);
+  
+  if (validHours.length === 0) {
+    return {
+      peakPerformanceHours: 'No data available',
+      underperformingHours: 'No data available',
+      topRecommendation: 'Sync more data to analyze performance patterns.',
+    };
+  }
+  
+  const sortedByScore = [...validHours].sort((a, b) => b.scores.composite - a.scores.composite);
   
   const peakHours = sortedByScore
     .filter(h => h.scores.composite >= 70)
-    .map(h => `${h.hour}:00`)
-    .slice(0, 5);
+    .map(h => `${h.hour}:00`);
   
   const underperformingHours = sortedByScore
     .filter(h => h.scores.composite < 40)
-    .map(h => `${h.hour}:00`)
-    .slice(-5);
+    .map(h => `${h.hour}:00`);
   
   // Format hour ranges
   const peakPerformanceHours = formatHourRanges(peakHours);
@@ -234,7 +275,8 @@ function generateSummary(hourlyAnalysis) {
   if (underperformingHours.length > 0 && peakHours.length > 0) {
     topRecommendation = `Consider ad scheduling to reduce spend during ${underperformingHoursFormatted} and increase during ${peakPerformanceHours}.`;
   } else if (peakHours.length > 0) {
-    topRecommendation = `${peakHours.length} hours show strong performance (avg score: ${Math.round(sortedByScore[0]?.scores.composite || 0)}).`;
+    const avgScore = Math.round(sortedByScore.slice(0, peakHours.length).reduce((sum, h) => sum + h.scores.composite, 0) / peakHours.length);
+    topRecommendation = `${peakHours.length} hours show strong performance (avg score: ${avgScore}).`;
   } else {
     topRecommendation = 'Performance is consistent across hours. Monitor for patterns.';
   }
@@ -247,7 +289,7 @@ function generateSummary(hourlyAnalysis) {
 }
 
 function formatHourRanges(hours) {
-  if (!hours.length) return '';
+  if (!hours || hours.length === 0) return '';
   
   // Extract hour numbers
   const hourNums = hours.map(h => parseInt(h.split(':')[0])).sort((a, b) => a - b);
@@ -276,17 +318,29 @@ function formatHourRanges(hours) {
 
 function generateRecommendations(hourlyAnalysis, overallMetrics) {
   const recommendations = [];
+  const validHours = hourlyAnalysis.filter(h => h.metrics.spend > 0);
+  
+  if (validHours.length === 0) {
+    return [{
+      type: 'data_needed',
+      priority: 'medium',
+      reason: 'Not enough data to generate recommendations. Sync more data.',
+    }];
+  }
   
   // Check for significant hourly variation
-  const scores = hourlyAnalysis.map(h => h.scores.composite);
+  const scores = validHours.map(h => h.scores.composite);
   const maxScore = Math.max(...scores);
   const minScore = Math.min(...scores);
   
   if (maxScore - minScore > 30) {
+    const peakHoursText = formatHourRanges(validHours.filter(h => h.scores.composite >= 70).map(h => `${h.hour}:00`));
+    const weakHoursText = formatHourRanges(validHours.filter(h => h.scores.composite < 40).map(h => `${h.hour}:00`));
+    
     recommendations.push({
       type: 'dayparting',
       priority: 'high',
-      reason: `Performance varies significantly by hour. Peak hours (${formatHourRanges(hourlyAnalysis.filter(h => h.scores.composite >= 70).map(h => `${h.hour}:00`))}) show ${Math.round((maxScore - minScore))}% better performance than weak hours (${formatHourRanges(hourlyAnalysis.filter(h => h.scores.composite < 40).map(h => `${h.hour}:00`))}).`,
+      reason: `Performance varies significantly by hour. Peak hours (${peakHoursText || 'N/A'}) show ${Math.round(maxScore - minScore)}% better performance than weak hours (${weakHoursText || 'N/A'}).`,
     });
   }
   
@@ -307,14 +361,23 @@ function generateRecommendations(hourlyAnalysis, overallMetrics) {
   }
   
   // Budget allocation recommendation
-  const increaseable = hourlyAnalysis.filter(h => h.recommendation === 'increase').length;
-  const decreaseable = hourlyAnalysis.filter(h => h.recommendation === 'decrease').length;
+  const increaseable = validHours.filter(h => h.recommendation === 'increase').length;
+  const decreaseable = validHours.filter(h => h.recommendation === 'decrease').length;
   
   if (increaseable > 0 && decreaseable > 0) {
     recommendations.push({
       type: 'budget_reallocation',
       priority: 'medium',
       reason: `Reallocate budget from ${decreaseable} underperforming hours to ${increaseable} high-performing hours.`,
+    });
+  }
+  
+  // If no specific recommendations, add a general one
+  if (recommendations.length === 0) {
+    recommendations.push({
+      type: 'monitoring',
+      priority: 'low',
+      reason: 'Campaign is performing steadily. Continue monitoring for optimization opportunities.',
     });
   }
   
