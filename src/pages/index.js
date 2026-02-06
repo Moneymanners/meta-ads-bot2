@@ -8,6 +8,9 @@ import {
 export default function Dashboard() {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [dailyAnalysis, setDailyAnalysis] = useState(null);
+const [impact, setImpact] = useState(null);
+const [suggestions, setSuggestions] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [settings, setSettings] = useState({
@@ -56,14 +59,48 @@ export default function Dashboard() {
     fetchCampaigns();
     fetchRecommendations();
   }, []);
+  const fetchDailyAnalysis = async (campaignId) => {
+  try {
+    const res = await fetch(`/api/daily-analysis?campaignId=${campaignId}`);
+    const data = await res.json();
+    setDailyAnalysis(data);
+  } catch (error) {
+    console.error('Error fetching daily analysis:', error);
+  }
+};
+
+const fetchImpact = async (campaignId) => {
+  try {
+    const res = await fetch(`/api/impact?campaignId=${campaignId}`);
+    const data = await res.json();
+    setImpact(data.impact);
+  } catch (error) {
+    console.error('Error fetching impact:', error);
+  }
+};
+
+const fetchSuggestions = async () => {
+  try {
+    const res = await fetch('/api/suggestions');
+    const data = await res.json();
+    setSuggestions(data);
+  } catch (error) {
+    console.error('Error fetching suggestions:', error);
+  }
+};
 
   // Fetch analysis when campaign selected
-  useEffect(() => {
-    if (selectedCampaign) {
-      fetchAnalysis(selectedCampaign.id);
-      fetchCampaignSettings(selectedCampaign.id);
-    }
-  }, [selectedCampaign]);
+useEffect(() => {
+  if (selectedCampaign) {
+    fetchAnalysis(selectedCampaign.id);
+    fetchDailyAnalysis(selectedCampaign.id);
+    fetchImpact(selectedCampaign.id);
+  }
+}, [selectedCampaign]);
+
+useEffect(() => {
+  fetchSuggestions();
+}, []);
 
   const fetchCampaignSettings = async (campaignId) => {
     try {
@@ -365,6 +402,160 @@ export default function Dashboard() {
                       ))}
                     </tbody>
                   </table>
+                        {/* Day of Week Performance */}
+{dailyAnalysis && (
+  <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
+    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <span>📅</span> Day-of-Week Performance
+    </h3>
+    
+    <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="bg-green-500/10 rounded-lg p-3">
+        <p className="text-xs text-gray-400">Best Days</p>
+        <p className="text-green-400 font-semibold">
+          {dailyAnalysis.best_days?.length > 0 ? dailyAnalysis.best_days.join(', ') : 'Analyzing...'}
+        </p>
+      </div>
+      <div className="bg-red-500/10 rounded-lg p-3">
+        <p className="text-xs text-gray-400">Worst Days</p>
+        <p className="text-red-400 font-semibold">
+          {dailyAnalysis.worst_days?.length > 0 ? dailyAnalysis.worst_days.join(', ') : 'None'}
+        </p>
+      </div>
+    </div>
+
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-gray-400 border-b border-white/10">
+            <th className="text-left py-2">DAY</th>
+            <th className="text-right py-2">AVG SPEND</th>
+            <th className="text-right py-2">ROAS</th>
+            <th className="text-right py-2">CPA</th>
+            <th className="text-right py-2">SCORE</th>
+            <th className="text-right py-2">ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          {dailyAnalysis.daily_breakdown?.map((day) => (
+            <tr key={day.day_name} className="border-b border-white/5">
+              <td className="py-2 font-medium">{day.day_name}</td>
+              <td className="text-right">${day.avg_spend}</td>
+              <td className={`text-right ${parseFloat(day.roas) >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+                {day.roas}x
+              </td>
+              <td className="text-right">${day.cpa}</td>
+              <td className="text-right">{day.score}</td>
+              <td className="text-right">
+                <span className={`px-2 py-1 rounded text-xs ${
+                  day.recommendation === 'INCREASE' ? 'bg-green-500/20 text-green-400' :
+                  day.recommendation === 'DECREASE' ? 'bg-red-500/20 text-red-400' :
+                  'bg-yellow-500/20 text-yellow-400'
+                }`}>
+                  {day.recommendation}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    {dailyAnalysis.recommendation && (
+      <div className="mt-4 p-3 bg-blue-500/10 rounded-lg">
+        <p className="text-sm text-blue-400">💡 {dailyAnalysis.recommendation}</p>
+      </div>
+    )}
+  </div>
+)}
+
+{/* Auto-Optimize Impact */}
+{impact && impact.auto_optimize_enabled_at && (
+  <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
+    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <span>📈</span> Auto-Optimize Impact
+    </h3>
+    
+    <p className="text-sm text-gray-400 mb-4">
+      Performance since auto-optimize enabled
+    </p>
+
+    <div className="grid grid-cols-3 gap-4">
+      <div className="bg-dark-700 rounded-lg p-4">
+        <p className="text-xs text-gray-400">ROAS</p>
+        <div className="flex items-baseline gap-2">
+          <span className="text-gray-500 line-through">{parseFloat(impact.before_roas).toFixed(2)}x</span>
+          <span className="text-xl font-bold text-green-400">{parseFloat(impact.after_roas).toFixed(2)}x</span>
+        </div>
+        <p className="text-sm text-green-400">+{impact.roas_improvement}%</p>
+      </div>
+
+      <div className="bg-dark-700 rounded-lg p-4">
+        <p className="text-xs text-gray-400">CPA</p>
+        <div className="flex items-baseline gap-2">
+          <span className="text-gray-500 line-through">${parseFloat(impact.before_cpa).toFixed(2)}</span>
+          <span className="text-xl font-bold text-green-400">${parseFloat(impact.after_cpa).toFixed(2)}</span>
+        </div>
+        <p className="text-sm text-green-400">-{impact.cpa_improvement}%</p>
+      </div>
+
+      <div className="bg-dark-700 rounded-lg p-4">
+        <p className="text-xs text-gray-400">EXTRA PROFIT</p>
+        <p className="text-2xl font-bold text-green-400">
+          +${parseFloat(impact.total_extra_profit).toFixed(2)}
+        </p>
+        <p className="text-sm text-gray-400">since enabled</p>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* AI Suggestions */}
+{suggestions && (
+  <div className="bg-dark-800 rounded-xl p-6 border border-white/5 mt-6">
+    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <span>🤖</span> Latest Optimization Tips
+    </h3>
+
+    <div className="mb-6">
+      <h4 className="text-sm font-medium text-gray-400 mb-3">📺 From YouTube Experts</h4>
+      <div className="space-y-3">
+        {suggestions.youtube_tips?.map((tip, index) => (
+          <div key={index} className="bg-dark-700 rounded-lg p-3">
+            <p className="font-medium text-sm">{tip.title}</p>
+            <p className="text-xs text-gray-400">— {tip.source}</p>
+            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="mb-6">
+      <h4 className="text-sm font-medium text-gray-400 mb-3">🌐 From the Web</h4>
+      <div className="space-y-3">
+        {suggestions.web_tips?.map((tip, index) => (
+          <div key={index} className="bg-dark-700 rounded-lg p-3">
+            <p className="font-medium text-sm">{tip.title}</p>
+            <p className="text-xs text-gray-400">— {tip.source}</p>
+            <p className="text-xs text-blue-400 mt-1">💡 {tip.tip}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div>
+      <h4 className="text-sm font-medium text-gray-400 mb-3">⚡ Quick Wins</h4>
+      <ul className="space-y-2">
+        {suggestions.general_recommendations?.map((tip, index) => (
+          <li key={index} className="text-sm text-gray-300 flex items-start gap-2">
+            <span className="text-green-400">✓</span>
+            {tip}
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+)}
                 </div>
               </div>
             </div>
