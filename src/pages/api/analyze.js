@@ -18,11 +18,11 @@ export default async function handler(req, res) {
     
     console.log('Fetching data for:', { campaignId, dateRange, fromDate, toDate });
     
-    // Fetch hourly data from database with campaign and date filter
-    const { data: hourlyData, error } = await supabase
+    // Try to fetch campaign-specific data first
+    let { data: hourlyData, error } = await supabase
       .from('hourly_performance')
       .select('*')
-      .eq('campaign_id', String(campaignId))  // Ensure string comparison
+      .eq('campaign_id', String(campaignId))
       .gte('date', fromDate)
       .lte('date', toDate)
       .order('hour', { ascending: true });
@@ -32,9 +32,26 @@ export default async function handler(req, res) {
       throw error;
     }
 
-    console.log(`Found ${hourlyData?.length || 0} hourly records for campaign ${campaignId}`);
+    // If no campaign-specific data found, try fetching all data (backwards compatibility)
+    if (!hourlyData || hourlyData.length === 0) {
+      console.log('No campaign-specific data found, trying without campaign filter...');
+      
+      const { data: allData, error: allError } = await supabase
+        .from('hourly_performance')
+        .select('*')
+        .gte('date', fromDate)
+        .lte('date', toDate)
+        .order('hour', { ascending: true });
+      
+      if (!allError && allData && allData.length > 0) {
+        hourlyData = allData;
+        console.log(`Found ${hourlyData.length} records without campaign filter`);
+      }
+    } else {
+      console.log(`Found ${hourlyData.length} records for campaign ${campaignId}`);
+    }
 
-    // If no data found for this campaign, return empty metrics
+    // If still no data, return empty response
     if (!hourlyData || hourlyData.length === 0) {
       return res.status(200).json({
         campaignId,
@@ -52,7 +69,7 @@ export default async function handler(req, res) {
         summary: {
           peakPerformanceHours: 'No data available',
           underperformingHours: 'No data available',
-          topRecommendation: 'Sync data to start analyzing this campaign.',
+          topRecommendation: 'Click "Sync Data" to fetch data from Meta.',
         },
         recommendations: [],
       });
@@ -266,11 +283,9 @@ function generateSummary(hourlyAnalysis) {
     .filter(h => h.scores.composite < 40)
     .map(h => `${h.hour}:00`);
   
-  // Format hour ranges
   const peakPerformanceHours = formatHourRanges(peakHours);
   const underperformingHoursFormatted = formatHourRanges(underperformingHours);
   
-  // Generate top recommendation
   let topRecommendation = '';
   if (underperformingHours.length > 0 && peakHours.length > 0) {
     topRecommendation = `Consider ad scheduling to reduce spend during ${underperformingHoursFormatted} and increase during ${peakPerformanceHours}.`;
@@ -291,13 +306,11 @@ function generateSummary(hourlyAnalysis) {
 function formatHourRanges(hours) {
   if (!hours || hours.length === 0) return '';
   
-  // Extract hour numbers
   const hourNums = hours.map(h => parseInt(h.split(':')[0])).sort((a, b) => a - b);
   
   if (hourNums.length === 0) return '';
   if (hourNums.length === 1) return `${hourNums[0]}:00`;
   
-  // Group consecutive hours
   const ranges = [];
   let start = hourNums[0];
   let end = hourNums[0];
@@ -328,7 +341,6 @@ function generateRecommendations(hourlyAnalysis, overallMetrics) {
     }];
   }
   
-  // Check for significant hourly variation
   const scores = validHours.map(h => h.scores.composite);
   const maxScore = Math.max(...scores);
   const minScore = Math.min(...scores);
@@ -344,7 +356,6 @@ function generateRecommendations(hourlyAnalysis, overallMetrics) {
     });
   }
   
-  // ROAS recommendation
   if (overallMetrics.overallRoas < 1) {
     recommendations.push({
       type: 'roas_optimization',
@@ -360,7 +371,6 @@ function generateRecommendations(hourlyAnalysis, overallMetrics) {
     });
   }
   
-  // Budget allocation recommendation
   const increaseable = validHours.filter(h => h.recommendation === 'increase').length;
   const decreaseable = validHours.filter(h => h.recommendation === 'decrease').length;
   
@@ -372,7 +382,6 @@ function generateRecommendations(hourlyAnalysis, overallMetrics) {
     });
   }
   
-  // If no specific recommendations, add a general one
   if (recommendations.length === 0) {
     recommendations.push({
       type: 'monitoring',
