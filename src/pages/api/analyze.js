@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   try {
-    // Check environment variables
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
     
@@ -33,13 +32,7 @@ export default async function handler(req, res) {
 
   } catch (err) {
     return res.status(200).json({ 
-      catchError: err.message,
-      stack: err.stack
+      catchError: err.message
     });
   }
 }
-```
-
-**Commit changes**, wait 2 minutes, then visit:
-```
-https://meta-ads-bot2.vercel.app/api/analyze?campaignId=test
