@@ -625,15 +625,15 @@ export default function Home() {
                             fetchImpact(selectedCampaign.id);
                           }
                         }}
-                        className={`relative w-12 h-6 rounded-full transition-colors ${
+                        className={`relative w-11 h-6 rounded-full transition-colors ${
                           settings.autoOptimize ? 'bg-green-500' : 'bg-gray-600'
                         }`}
                       >
                         <span
-                          className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                            settings.autoOptimize ? 'translate-x-7' : 'translate-x-1'
-                          }`}
-                        />
+  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 ${
+    settings.autoOptimize ? 'left-6' : 'left-1'
+  }`}
+/>
                       </button>
                     </div>
                     <div>
